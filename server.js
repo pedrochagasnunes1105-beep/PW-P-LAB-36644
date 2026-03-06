@@ -95,20 +95,57 @@ app.delete("/movies/:id",(req,res) => {
 
 // Tasks
 
-app.get("/tasks", (req, res) => {
-  if (tasks.lenght === 0){
-    return res.status(404).json({ message: "No tasks found" })
-  }
+app.get('/tasks', (req, res) => {
 
-    res.status(200).json(tasks)
+    const { completed } = req.query
+
+    if(completed == undefined) {
+        return res.status(200).json({ message: "Sucesso ao acessar a lista de tasks", tasks: tasks })
+    }
+
+    const isCompleted = completed === 'true'
+
+    const tasksList = tasks.filter(task => task.completed === isCompleted)
+    
+    res.status(200).json({ 
+        message: "Sucesso ao buscar tarefa", 
+        tasksList 
+    })
 })
+
+app.get('/tasks/stats', (req, res) => {
+    let completedTasks = 0
+    let pendentTasks = 0
+
+    tasks.forEach(task => {
+        if (task.completed) {
+            completedTasks++
+        }
+    })
+    
+    tasks.forEach(task => {
+        if (task.completed === false) {
+            pendentTasks++
+        }
+    })
+
+    res.status(200).json({ 
+        message: "Sucesso ao buscar status gerais das tarefas", 
+        tasksList: {
+            totalTasks: tasks.length,
+            completedTasks: completedTasks,
+            pendentTasks: pendentTasks
+        } 
+    })
+})
+
 
 app.get('/tasks/:id', (req, res) => {
 
     const { 
         id
     } = req.params
-    console.log(id)
+    
     
     if (!id) {
         return res.status(404).json({ message: "Não foi adicionado nenhum ID aos parâmetros" })
@@ -123,19 +160,33 @@ app.get('/tasks/:id', (req, res) => {
     res.status(200).json({ message: "sucesso ao acessar a rota de get task", task })
 })
 
-app.post("/tasks", (req, res) => {
-    const { priority, title} = req.body
+app.post('/tasks', (req, res) => {
 
-    const id = tasks.length + 1
+    const tasksLenght = tasks.length
 
-    const newtask = {
-      id,
-      title,
-      priority
+    const {
+        title,
+        priority
+    } = req.body
+
+    if (!title || !priority) {
+        return res.status(404).json({ message: "Por favor, insira o titulo da task e o sua prioridade" })
     }
-    
-    tasks.push(newtask)
-    res.status(200).json({ message: "Sucesso ao cadastrar uma task.", newtask: newtask})
+
+    if (priority != "low" && priority != "medium" && priority != "high") {
+        return res.status(404).json({ message: "Por favor, insira uma prioridade válida (low, medium ou high)." })
+    }
+
+    const newTask = {
+        id: tasksLenght + 1,
+        title,
+        completed: false,
+        priority
+    }
+
+    tasks.push(newTask)
+
+    res.status(200).json({ message: "Sucesso ao adicionar task nova", updatedTasks: tasks })
 })
 
 app.put("/tasks/:id", (req, res) =>{
@@ -163,9 +214,24 @@ app.delete("/tasks/:id",(req,res) => {
 
   const taskToDelete = tasks.filter((task)=>task.id == id)
 
-  tasks = tasks.filter((task) => task.id != taskToDelete)
+  tasks = tasks.filter((task) => task.id != taskToDelete[0].id)
 
   res.status(200).json({message:"Sucesso ao acessar rota de delete", updatetasksList: tasks})
+})
+
+app.patch('/tasks/:id/toggle', (req, res) => {
+
+    const { id } = req.params
+
+    if (!id) return res.status(404).json({ message: "Forneça um ID"})
+
+    const taskToEdit = tasks.filter(task => task.id == id)
+
+    if (taskToEdit.length == 0) return res.status.json({ message: "Não foi encontrada nenhuma task com esse ID."})
+
+    taskToEdit[0].completed = !taskToEdit[0].completed
+
+    res.status(200).json({ message: `Sucesso ao editar o task de id ${id}`, updatedTask: taskToEdit[0] })
 })
 
 const PORT = process.env.SERVER_PORT || 3000;
