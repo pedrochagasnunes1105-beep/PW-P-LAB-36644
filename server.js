@@ -3,12 +3,20 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require("@prisma/adapter-pg");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
+
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const prisma = new PrismaClient({ adapter });
 
 let movies = [
   { id: 1, title: "inception", year: 2010},
@@ -21,7 +29,7 @@ let tasks = [
 ];
 
 app.get("/movies", (req, res) => {
-  if (movies.lenght === 0){
+  if (movies.length === 0){
     return res.status(404).json({ message: "No movies found" })
   }
 
@@ -234,6 +242,129 @@ app.patch('/tasks/:id/toggle', (req, res) => {
     res.status(200).json({ message: `Sucesso ao editar o task de id ${id}`, updatedTask: taskToEdit[0] })
 })
 
+//tasks com prisma
+
+app.get('/prisma/tasks', async (req, res) =>{
+    const { completed } = req.query
+
+    const isCompleted = completed === "true"
+
+    if(completed) {
+        const tasks = await prisma.tasks.findMany({
+            where: { completed: isCompleted }
+        })
+        if(tasks.length == 0) {
+            return res.status(404).json({ message: "Não foram encontradas tasks concluídas."})
+        }
+        res.status(200).json({ message: "A busca de tasks foi concluída.", finalTasks: tasks })
+    }
+
+    const tasks = await prisma.tasks.findMany()
+
+    if(tasks.length == 0) {
+        return res.status(404).json({ message: "A busca não encontrou nenhuma task."})
+    }
+
+    res.status(200).json({ message: "A busca encontrou tasks", tasks })
+})
+
+app.get('/prisma/tasks/:id', async (req, res) =>{
+    const { id } = req.params
+    const parseId = parseInt(id)
+
+    if(!id) {
+        return res.status(404).json({ message: "Indique um ID."})
+    }
+
+    const tasks = await prisma.task.findUnique({
+        where: { id: parseId }
+    })
+
+    if(tasks.length == 0) {
+        return res.status(404).json({ message: "Falha ao encontrar tasks."})
+    }
+
+    res.status(200).json({ message: "A busca encontrou tasks", tasks})
+})
+
+app.post('/prisma/tasks', async (req,res) => {
+    const {
+        title,
+        priority
+    } = req.body
+
+    if (!title || !priority) {
+        return res.status(404).json({message: "Indique uma das prioridades válidas (low, medium ou high)."})
+    }
+
+    const newTask = await prisma.tasks.create({
+        data: {
+            title: title,
+            priority: priority,
+        }
+    })
+
+    res.status(200).json({ message: "Conclusão ao adicionar uma nova task", newTask: newTask })
+})
+
+app.put('/prisma/tasks/:id', async (req, res) => {
+
+    const { id } = req.params
+    const { title, priority } = req.body
+
+    const parseId = parseInt(id)
+
+    if(!id) {
+        return res.status(404).json({ message: "Indique um ID. "})
+    }
+
+    if(!title && !priority) {
+        return res.status(404).json({ message: "Não foi indicado nenhum dado para a atualização."})
+    }
+
+    const updateTask = await prisma.task.update({
+        where: { id: parseId },
+        data: {
+            title,
+            priority
+        }
+    })
+
+    res.status(200).json({ message: `Atualização concluida do id ${id}`, updateTask: updateTask })
+})
+
+app.patch('/prisma/tasks/:id/toggle', async (res,req) => {
+    const { id } = req.params
+    const parseId = parseInt(id)
+
+    if(!id) return res.status(404).json({ message: "Indique um ID."})
+    
+    const task = await prisma.task.findUnique({ where: { id: parseId }})
+    const isCompleted = task.completed === true
+    
+    if(task.length == 0) {
+        return res.status(404).json({ message: "A busca não resultou em nenhum resultado com este id"})
+    }
+
+    const updateTask = await prisma.task.update({
+        where: { id: parseId },
+    data: {completed: !isCompleted}    
+})
+
+    res.status(200).json({ message: `Atualização do id ${id} concluída`, updateTask: updateTask })
+})
+
+app.delete('/prisma/tasks/:id', async (req,res) =>{
+
+    const { id } = req.params
+    const parseId = parseInt(id)
+
+    if(!id) return res.status (404).json({ message: "Indique um ID"})
+    
+    const task = await prisma.task.findUnique({ where: { id: parseId }})
+
+    res.status(200).json({ message: "Task deletada.", deletedTask: taskToDelelte })
+})
 const PORT = process.env.SERVER_PORT || 3000;
 
 
